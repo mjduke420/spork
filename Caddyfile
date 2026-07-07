@@ -1,0 +1,18 @@
+# Caddy front door for Spork (plain HTTP).
+#   - Serves the web client from /srv on container port 80.
+#   - Proxies /ws to the headless Godot server (WebSocket upgrade is automatic).
+#
+# The published host port is set in docker-compose.yml (WEB_PORT, default 8767),
+# so players reach the game at http://HOST:<WEB_PORT>. The web client is exported
+# single-threaded, so no HTTPS / secure context / COOP-COEP headers are required.
+# Want TLS? Put your own HTTPS reverse proxy (or a tunnel) in front of this port.
+:80 {
+	encode zstd gzip
+
+	# Game server WebSocket (ws://HOST:<WEB_PORT>/ws -> the server container).
+	reverse_proxy /ws server:8766
+
+	# Static web client.
+	root * /srv
+	file_server
+}

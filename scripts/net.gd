@@ -57,6 +57,10 @@ func start_dedicated_server() -> bool:
 	multiplayer.multiplayer_peer = peer
 	local_id = multiplayer.get_unique_id()
 	GameState.local_id = local_id
+	# The dedicated server also self-assigns peer id 1, same as GameState's
+	# single-player seed created at boot (GameState._ready()) — discard that seed
+	# so the server itself never shows up as a phantom player in the roster.
+	GameState.players.clear()
 	is_dedicated_server = true
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	print("Spork dedicated server listening on ws port %d" % PORT)

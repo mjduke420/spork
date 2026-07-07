@@ -13,9 +13,27 @@ func _ready() -> void:
 		_run_host()
 	elif "--join" in args:
 		_run_join()
+	elif "--dedicated" in args:
+		_run_dedicated()
 	else:
-		print("NET_SANITY: FAIL (pass -- --host or -- --join)")
+		print("NET_SANITY: FAIL (pass -- --host, -- --join, or -- --dedicated)")
 		get_tree().quit(1)
+
+## Reproduces the reported bug directly: a dedicated server must NOT show up as
+## a phantom player in its own roster (GameState._ready() seeds a single-player
+## entry at boot under peer id 1, which a dedicated server also self-assigns —
+## start_dedicated_server() must discard that seed).
+func _run_dedicated() -> void:
+	if not Net.start_dedicated_server():
+		print("NET_SANITY: FAIL (start_dedicated_server failed)")
+		get_tree().quit(1)
+		return
+	if GameState.players.is_empty():
+		print("NET_SANITY: PASS (dedicated server roster starts empty, no phantom player)")
+	else:
+		print("NET_SANITY: FAIL (dedicated server roster has %d phantom player(s): %s)" % [
+			GameState.players.size(), GameState.players.keys()])
+	get_tree().quit()
 
 func _run_host() -> void:
 	Net.player_joined.connect(func(id, pname): print("NET_SANITY: host saw player_joined %d %s" % [id, pname]))

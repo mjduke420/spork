@@ -30,7 +30,7 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if get_global_mouse_position().distance_to(global_position) <= radius * 1.6:
-			GameState.add_biomass(value)
+			GameState.local.add_biomass(value)
 			get_viewport().set_input_as_handled()
 			queue_free()
 

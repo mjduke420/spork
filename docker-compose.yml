@@ -1,0 +1,22 @@
+# Spork: headless game server + Caddy-served web client (plain HTTP).
+# Run:          docker compose up --build                  -> http://localhost:8767
+# Custom port:  WEB_PORT=9000 docker compose up --build    -> http://localhost:9000
+services:
+  server:
+    build:
+      context: .
+      target: server
+    restart: unless-stopped
+    expose:
+      - "8766"          # internal only; reached via the web service's /ws proxy
+
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      # Published host port -> Caddy (container :80). Override with WEB_PORT.
+      - "${WEB_PORT:-8767}:80"

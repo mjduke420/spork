@@ -1,12 +1,14 @@
 extends Node2D
 
-## Spawns hostiles and food pellets from the screen edges. Composition and rate scale
-## with the player's current evolution stage so the world gets more dangerous as you grow.
+## Spawns hostiles and food pellets on a ring around the players' current position
+## (not the viewport, since the world is a bigger arena the camera pans around).
+## Composition and rate scale with the local player's evolution stage so the world
+## gets more dangerous as you grow.
 
 const Hostile := preload("res://scripts/hostile.gd")
 const Food := preload("res://scripts/food.gd")
 
-const MARGIN := 40.0
+const SPAWN_MARGIN := 260.0   # spawn just outside the player's current view
 const MAX_HOSTILES := 14
 
 var _hostile_cd: float = 2.0
@@ -26,22 +28,22 @@ func _process(delta: float) -> void:
 
 func _rate_scale() -> float:
 	# higher stages spawn a little faster (never below ~0.6x interval)
-	return maxf(0.6, 1.0 - GameState.stage_index * 0.05)
+	return maxf(0.6, 1.0 - GameState.local.stage_index * 0.05)
 
 func _spawn_hostile() -> void:
 	var h: Node2D = Hostile.new()
-	h.position = _edge_position()
+	h.position = _spawn_position()
 	add_child(h)
 	h.setup(_pick_config())
 
 func _spawn_food() -> void:
 	var f: Node2D = Food.new()
-	f.position = _edge_position()
+	f.position = _spawn_position()
 	add_child(f)
-	f.setup(3.0 + GameState.stage_index * 2.0)
+	f.setup(3.0 + GameState.local.stage_index * 2.0)
 
 func _pick_config() -> Dictionary:
-	var stage: int = GameState.stage_index
+	var stage: int = GameState.local.stage_index
 	var roll := randf()
 	# apex only starts appearing once you have some defenses
 	if stage >= 4 and roll < 0.2:
@@ -64,17 +66,32 @@ func _pick_config() -> Dictionary:
 
 func _scaled(cfg: Dictionary) -> Dictionary:
 	# grow hp/reward gently with stage so late hostiles stay relevant
-	var f := 1.0 + GameState.stage_index * 0.18
+	var f := 1.0 + GameState.local.stage_index * 0.18
 	cfg["hp"] = float(cfg["hp"]) * f
 	cfg["reward"] = float(cfg["reward"]) * f
 	cfg["bite_biomass"] = float(cfg["bite_biomass"]) * f
 	return cfg
 
-func _edge_position() -> Vector2:
-	var size := get_viewport_rect().size
-	var side := randi() % 4
-	match side:
-		0: return Vector2(randf() * size.x, -MARGIN)                 # top
-		1: return Vector2(size.x + MARGIN, randf() * size.y)         # right
-		2: return Vector2(randf() * size.x, size.y + MARGIN)         # bottom
-		_: return Vector2(-MARGIN, randf() * size.y)                 # left
+## Spawns on a ring just outside the current viewport around the players' average
+## position (falls back to the arena center if no player exists yet), clamped
+## inside the arena so nothing appears beyond the boundary.
+func _spawn_position() -> Vector2:
+	var origin := _players_center()
+	var view := get_viewport_rect().size
+	var dist: float = view.length() * 0.5 + SPAWN_MARGIN
+	var ang := randf() * TAU
+	var pos := origin + Vector2(cos(ang), sin(ang)) * dist
+	return pos.limit_length(GameState.ARENA_RADIUS)
+
+func _players_center() -> Vector2:
+	var total := Vector2.ZERO
+	var count := 0
+	for p in get_tree().get_nodes_in_group("players"):
+		var node2d := p as Node2D
+		if node2d == null:
+			continue
+		total += node2d.global_position
+		count += 1
+	if count == 0:
+		return Vector2.ZERO
+	return total / float(count)

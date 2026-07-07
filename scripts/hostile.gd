@@ -22,6 +22,7 @@ var _bite_cd: float = 0.0
 var _flash: float = 0.0
 var _wander: Vector2 = Vector2.ZERO
 var _knock: Vector2 = Vector2.ZERO
+var _retarget_cd: float = 0.0
 
 func setup(config: Dictionary) -> void:
 	kind = int(config.get("kind", Kind.PREDATOR))
@@ -37,7 +38,7 @@ func setup(config: Dictionary) -> void:
 
 func _ready() -> void:
 	add_to_group("hostiles")
-	_player = get_tree().get_first_node_in_group("player")
+	_retarget()
 
 func _process(delta: float) -> void:
 	_t += delta
@@ -45,10 +46,30 @@ func _process(delta: float) -> void:
 	_flash = maxf(0.0, _flash - delta * 4.0)
 	global_position += _knock * delta
 	_knock = _knock.lerp(Vector2.ZERO, clampf(delta * 6.0, 0.0, 1.0))
+	global_position = global_position.limit_length(GameState.ARENA_RADIUS)
 
+	_retarget_cd -= delta
+	if _retarget_cd <= 0.0 or not is_instance_valid(_player):
+		_retarget_cd = 1.0
+		_retarget()
 	if is_instance_valid(_player):
 		_move_and_bite(delta)
 	queue_redraw()
+
+## Picks the closest node in the "players" group so hostiles naturally split their
+## attention once more than one player exists (only one exists today).
+func _retarget() -> void:
+	var nearest: Node2D = null
+	var best_dist := INF
+	for p in get_tree().get_nodes_in_group("players"):
+		var node2d := p as Node2D
+		if node2d == null:
+			continue
+		var d: float = node2d.global_position.distance_to(global_position)
+		if d < best_dist:
+			best_dist = d
+			nearest = node2d
+	_player = nearest
 
 func _move_and_bite(delta: float) -> void:
 	var to_player: Vector2 = _player.global_position - global_position
@@ -63,23 +84,28 @@ func _move_and_bite(delta: float) -> void:
 
 	if dist <= contact and _bite_cd <= 0.0 and kind != Kind.GRAZER:
 		_bite_cd = 0.8
-		if randf() < GameState.dodge_chance:
+		var target_state = _player.state
+		if randf() < target_state.dodge_chance:
 			return   # the player swam clear of the bite
 		_flash = 1.0
-		GameState.add_biomass(-bite_biomass)
-		GameState.take_damage(bite_hp)
+		target_state.add_biomass(-bite_biomass)
+		target_state.take_damage(bite_hp)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if get_global_mouse_position().distance_to(global_position) <= radius * 1.25:
-			take_damage(maxf(GameState.click_value, 2.0))
+			take_damage(maxf(GameState.local.click_value, 2.0))
 			get_viewport().set_input_as_handled()
 
 func take_damage(dmg: float) -> void:
 	hp -= dmg
 	_flash = 1.0
 	if hp <= 0.0:
-		GameState.add_biomass(reward)
+		# reward whichever player this hostile was engaging (falls back to the
+		# local player if it died before ever acquiring a target)
+		var payee = _player.state if is_instance_valid(_player) else GameState.local
+		payee.add_biomass(reward)
+		payee.kills_hostiles += 1
 		queue_free()
 
 func knockback(impulse: Vector2) -> void:

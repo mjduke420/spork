@@ -10,9 +10,9 @@ var _buttons: Dictionary = {}   # id -> Button
 func _ready() -> void:
 	layer = 10
 	_build_ui()
-	GameState.biomass_changed.connect(func(_a): _refresh())
-	GameState.upgrades_changed.connect(_refresh)
-	GameState.evolved.connect(func(_s): _refresh())
+	GameState.local.biomass_changed.connect(func(_a): _refresh())
+	GameState.local.upgrades_changed.connect(_refresh)
+	GameState.local.evolved.connect(_refresh)
 	_refresh()
 
 func _build_ui() -> void:
@@ -46,20 +46,20 @@ func _build_ui() -> void:
 	var reset := Button.new()
 	reset.text = "Reset progress"
 	reset.custom_minimum_size = Vector2(276, 32)
-	reset.pressed.connect(func(): GameState.reset_progress())
+	reset.pressed.connect(func(): GameState.local.reset())
 	box.add_child(reset)
 
 func _on_buy(id: String) -> void:
-	GameState.buy_upgrade(id)
+	GameState.local.buy_upgrade(id)
 
 func _refresh() -> void:
 	for upg in UpgradeData.UPGRADES:
 		var id: String = upg["id"]
 		var btn: Button = _buttons[id]
-		var level: int = GameState.upgrade_level(id)
-		var cost: float = GameState.upgrade_cost(id)
+		var level: int = GameState.local.upgrade_level(id)
+		var cost: float = GameState.local.upgrade_cost(id)
 		btn.text = "%s  (Lv.%d)\n%s  —  %s" % [upg["name"], level, upg["desc"], _fmt(cost)]
-		btn.disabled = not GameState.can_buy_upgrade(id)
+		btn.disabled = not GameState.local.can_buy_upgrade(id)
 
 func _fmt(v: float) -> String:
 	return "%s biomass" % String.num(floorf(v), 0)

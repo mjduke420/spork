@@ -3,7 +3,10 @@
 .godot/**
 *.translation
 export.cfg
-export_presets.cfg
+# NOTE: export_presets.cfg is intentionally tracked (not ignored) — the Docker
+# build's `godot --export-release "Web"` step needs it present in the checked-
+# out source, same as godot-rpg's repo does.
+build/
 
 # Mono-specific ignores
 .mono/

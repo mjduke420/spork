@@ -102,6 +102,7 @@ func _build_eyes(parent: Node) -> void:
 
 	var vp_container := SubViewportContainer.new()
 	vp_container.custom_minimum_size = Vector2(EYE_VIEWPORT_SIZE)
+	vp_container.stretch = true
 	eyes_center.add_child(vp_container)
 
 	var vp := SubViewport.new()

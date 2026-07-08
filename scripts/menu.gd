@@ -1,9 +1,10 @@
 extends Control
 
-## Host/Join/Solo menu — gates scenes/main.tscn. Mirrors godot-rpg's name-entry +
-## Host/Join flow. "Play Solo" needs no Net call at all: GameState already seeds a
-## local PlayerState on boot, so going straight to main.tscn is the same
-## single-player experience the game has always had.
+## Entry menu — gates scenes/main.tscn. Desktop is Solo-only; multiplayer is
+## hosted entirely via Docker/Portainer (see DOCKER.md), reached through the Web
+## export's one-click "Play". "Play Solo" needs no Net call at all: GameState
+## already seeds a local PlayerState on boot, so going straight to main.tscn is
+## the same single-player experience the game has always had.
 
 const MAIN_SCENE := "res://scenes/main.tscn"
 const GooglyEye := preload("res://scripts/googly_eye.gd")
@@ -17,9 +18,7 @@ const ACCENT := Color(0.45, 0.85, 0.55)   # protocell green, same as player_cell
 const EYE_VIEWPORT_SIZE := Vector2i(150, 64)
 
 var _name_field: LineEdit
-var _ip_field: LineEdit
 var _status: Label
-var _host_btn: Button
 var _join_btn: Button
 
 func _ready() -> void:
@@ -39,8 +38,8 @@ func _build_ui() -> void:
 	_build_background()
 
 	# CenterContainer (not a raw anchor preset on the box itself) keeps the card
-	# truly centered regardless of its size, including as it grows/shrinks when
-	# the Host/IP fields hide on web.
+	# truly centered regardless of its size, including the desktop/web difference
+	# below (desktop is Solo-only; web adds a "Play" button).
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
@@ -78,36 +77,16 @@ func _build_ui() -> void:
 	solo_btn.pressed.connect(_on_solo_pressed)
 	box.add_child(solo_btn)
 
-	box.add_child(HSeparator.new())
-
-	_host_btn = _styled_button("Host Game (this machine, port %d)" % Net.PORT)
-	_host_btn.pressed.connect(_on_host_pressed)
-	box.add_child(_host_btn)
-
-	box.add_child(HSeparator.new())
-
-	var ip_label := Label.new()
-	ip_label.text = "Host address"
-	ip_label.add_theme_font_size_override("font_size", 14)
-	ip_label.add_theme_color_override("font_color", Color(0.8, 0.9, 0.95))
-	box.add_child(ip_label)
-	_ip_field = LineEdit.new()
-	_ip_field.text = "127.0.0.1"
-	_ip_field.custom_minimum_size = Vector2(0, 36)
-	box.add_child(_ip_field)
-
-	_join_btn = _styled_button("Join Game")
-	_join_btn.pressed.connect(_on_join_pressed)
-	box.add_child(_join_btn)
-
-	# In a browser the server is whatever host served the page (via Caddy's /ws
-	# proxy, see Caddyfile) — there's nothing to "host" locally and no address to
-	# type, so collapse straight to a one-click "Play".
+	# Multiplayer is hosted entirely via Docker/Portainer now (see DOCKER.md) —
+	# there's no desktop "Host Game" listen-server anymore, and no manual address
+	# to join by hand. The Web export (served by that same Docker deployment) is
+	# the only build that needs a join path, and it derives the server address
+	# from the page itself via Caddy's /ws proxy, so it's a single click.
 	if OS.has_feature("web"):
-		_host_btn.visible = false
-		ip_label.visible = false
-		_ip_field.visible = false
-		_join_btn.text = "Play"
+		box.add_child(HSeparator.new())
+		_join_btn = _styled_button("Play")
+		_join_btn.pressed.connect(_on_join_pressed)
+		box.add_child(_join_btn)
 
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -204,20 +183,12 @@ func _on_solo_pressed() -> void:
 	GameState.local.player_name = _player_name()
 	get_tree().change_scene_to_file(MAIN_SCENE)
 
-func _on_host_pressed() -> void:
-	_status.text = ""
-	if Net.host_game(_player_name()):
-		get_tree().change_scene_to_file(MAIN_SCENE)
-	else:
-		_status.text = "Could not start server (port %d busy?)" % Net.PORT
-
 func _on_join_pressed() -> void:
 	_status.text = "Connecting..."
 	_join_btn.disabled = true
 	Net.joined_ok.connect(_on_join_ok, CONNECT_ONE_SHOT)
 	Net.connection_failed.connect(_on_join_failed, CONNECT_ONE_SHOT)
-	var target: String = _web_server_url() if OS.has_feature("web") else _ip_field.text
-	if not Net.join_game(target, _player_name()):
+	if not Net.join_game(_web_server_url(), _player_name()):
 		_on_join_failed()
 
 func _on_join_ok() -> void:

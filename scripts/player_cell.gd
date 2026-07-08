@@ -12,6 +12,7 @@ extends Node2D
 const GooglyEye := preload("res://scripts/googly_eye.gd")
 const EvolutionData := preload("res://scripts/evolution_data.gd")
 const PlayerState := preload("res://scripts/player_state.gd")
+const OozeDot := preload("res://scripts/ooze_dot.gd")
 
 const BODY_START := Color(0.45, 0.85, 0.55)   # protocell green
 const BODY_END := Color(0.36, 0.62, 0.96)     # fish blue
@@ -43,6 +44,18 @@ var _state_report_cd: float = 0.0
 var _remote_target: Vector2 = Vector2.ZERO
 var _has_remote_target: bool = false
 
+# Direction the tail trails away from (opposite of _facing_dir) and the ooze
+# trail left behind while swimming. Driven off actual position deltas each
+# frame, so it works identically for local (WASD) and remote (lerped) cells.
+const FACING_TURN_SPEED := 8.0
+const OOZE_TICK := 0.15
+const OOZE_MIN_DIST := 10.0
+
+var _facing_dir: Vector2 = Vector2(1, 0)
+var _ooze_timer: float = 0.0
+var _last_ooze_pos: Vector2 = Vector2.ZERO
+var _ooze_pos_initialized: bool = false
+
 func _ready() -> void:
 	if state == null:
 		state = GameState.local
@@ -58,12 +71,14 @@ func _process(delta: float) -> void:
 	_squish = move_toward(_squish, 0.0, delta * 3.5)
 	var breathe := 1.0 + sin(_t * 2.0) * 0.02
 	scale = Vector2(breathe + _squish * 0.18, breathe - _squish * 0.15)
+	var pos_before := global_position
 	if is_local:
 		_move(delta)
 		_report_network(delta)
 		_update_contact(delta)
 	elif _has_remote_target:
 		global_position = global_position.lerp(_remote_target, clampf(delta * REMOTE_LERP_SPEED, 0.0, 1.0))
+	_update_motion_effects(pos_before, delta)
 	_update_spikes(delta)
 	queue_redraw()
 
@@ -146,6 +161,38 @@ func _update_contact(delta: float) -> void:
 			_contact_timer = CONTACT_TICK
 			Net.send_contact(other.player_id)
 			return
+
+## Smoothly turns the tail to trail behind wherever this cell is actually
+## moving (works for local WASD movement and remote lerped movement alike,
+## since both just change global_position frame to frame), and drops a
+## fading ooze droplet every so often while in motion.
+func _update_motion_effects(pos_before: Vector2, delta: float) -> void:
+	var moved := global_position - pos_before
+	if moved.length() > 0.5:
+		_facing_dir = _facing_dir.slerp(moved.normalized(), clampf(delta * FACING_TURN_SPEED, 0.0, 1.0)).normalized()
+
+	if not _ooze_pos_initialized:
+		_last_ooze_pos = global_position
+		_ooze_pos_initialized = true
+		return
+	_ooze_timer -= delta
+	if _ooze_timer > 0.0:
+		return
+	if global_position.distance_to(_last_ooze_pos) < OOZE_MIN_DIST:
+		return
+	_ooze_timer = OOZE_TICK
+	_last_ooze_pos = global_position
+	_spawn_ooze()
+
+func _spawn_ooze() -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	var dot := OozeDot.new()
+	var body := BODY_START.lerp(BODY_END, _stage_ratio())
+	dot.setup(radius * 0.2, Color(body.r, body.g, body.b, 0.4))
+	parent.add_child(dot)
+	dot.global_position = global_position
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
@@ -397,14 +444,18 @@ func _draw_whale(body: Color) -> void:
 	draw_circle(Vector2(radius * 0.55, -radius * 0.85), radius * 0.06, body.darkened(0.4))
 
 func _draw_flagellum(body: Color) -> void:
+	# Trails behind _facing_dir (the smoothed actual-movement direction) rather
+	# than a fixed axis, so it whips around and drags behind you as you swim.
+	var tail_axis := -_facing_dir
+	var side_axis := tail_axis.orthogonal()
+	var base_dist := radius * 1.1
 	var pts := PackedVector2Array()
-	var base_x := -radius * 1.1
 	var segs := 12
 	for i in segs + 1:
 		var f := float(i) / float(segs)
-		var x := base_x - f * radius * 1.4
-		var y := sin(f * 6.0 - _t * 8.0) * radius * 0.4 * f
-		pts.append(Vector2(x, y))
+		var along := base_dist + f * radius * 1.4
+		var wig := sin(f * 6.0 - _t * 8.0) * radius * 0.4 * f
+		pts.append(tail_axis * along + side_axis * wig)
 	draw_polyline(pts, body.darkened(0.15), 5.0, true)
 
 func _draw_spikes(col: Color) -> void:

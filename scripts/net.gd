@@ -174,7 +174,15 @@ func relay_position(peer_id: int, pos: Vector2) -> void:
 func report_state(snapshot: Dictionary) -> void:
 	if not multiplayer.is_server():
 		return
-	relay_state.rpc(multiplayer.get_remote_sender_id(), snapshot)
+	var sender := multiplayer.get_remote_sender_id()
+	# The server's own GameState.players copy has no other way to learn a
+	# client's reported fields (pvp_enabled, biomass, etc.) — main.gd normally
+	# applies state_updated, but a dedicated server never loads main.tscn, so
+	# without this the server's copy of every client stays stuck at defaults
+	# forever (pvp_enabled=false), silently blocking _resolve_attack/_resolve_contact.
+	if GameState.players.has(sender):
+		GameState.players[sender].apply_snapshot(snapshot)
+	relay_state.rpc(sender, snapshot)
 
 @rpc("authority", "call_local", "reliable")
 func relay_state(peer_id: int, snapshot: Dictionary) -> void:

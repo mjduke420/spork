@@ -79,29 +79,12 @@ const STAGES: Array[Dictionary] = [
 		"move_speed": 108.0,
 		"traits": ["eyes", "membrane", "flagellum", "spikes", "mito", "multi"],
 	},
-	{
-		"name": "Proto-fish",
-		"cost": 15000.0,
-		"radius": 74.0,
-		"click_value": 35.0,
-		"idle": 18.0,
-		"max_hp": 140.0,
-		"move_speed": 135.0,
-		"traits": ["eyes", "membrane", "flagellum", "spikes", "mito", "multi", "protofish"],
-	},
-	{
-		"name": "Googly Fish",
-		"cost": 40000.0,
-		"radius": 86.0,
-		"click_value": 60.0,
-		"idle": 40.0,
-		"max_hp": 200.0,
-		"move_speed": 150.0,
-		"traits": ["eyes", "membrane", "flagellum", "spikes", "mito", "multi", "protofish", "fish"],
-	},
 ]
 
-## Diverging endgame lineages, chosen once the trunk above is maxed (Googly Fish).
+## Diverging endgame lineages, chosen once the trunk above is maxed (Multicellular) —
+## the branch point comes before ever reaching a fish form; each lineage's own path
+## carries the fish traits below plus its own tags, so a chosen lineage looks like a
+## fish (or crab/octopus) from its very first step.
 ## Each path is two "smaller" evolutions followed by a giant apex form. Traits are
 ## cumulative (like STAGES): every entry lists the full base fish traits plus its
 ## own lineage tags, so has_trait() works identically for trunk and branch stages.

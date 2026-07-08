@@ -5,7 +5,7 @@ extends RefCounted
 ## preload (const UpgradeData) by GameState and the upgrade panel.
 
 const UPGRADES: Array[Dictionary] = [
-	{"id": "click", "name": "Bigger Bite", "desc": "+1 biomass per click", "base_cost": 50.0, "growth": 1.55, "per_level": 1.0},
+	{"id": "click", "name": "Bigger Bite", "desc": "+3 biomass per click", "base_cost": 50.0, "growth": 1.55, "per_level": 3.0},
 	{"id": "idle", "name": "Metabolism", "desc": "+3 idle biomass/sec", "base_cost": 150.0, "growth": 1.6, "per_level": 3.0},
 	{"id": "hp", "name": "Tough Membrane", "desc": "+10 max HP", "base_cost": 120.0, "growth": 1.55, "per_level": 10.0},
 	{"id": "regen", "name": "Fast Healing", "desc": "+1 HP regen/sec", "base_cost": 180.0, "growth": 1.6, "per_level": 1.0},

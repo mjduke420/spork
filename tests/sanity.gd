@@ -47,8 +47,8 @@ func _ready() -> void:
 		_check(state.move_speed >= prev_speed, "move_speed non-decreasing at %s" % next["name"])
 		prev_speed = state.move_speed
 
-	_check(state.current_stage()["name"] == "Googly Fish", "trunk ends at the fish")
-	_check(state.has_trait("fish") and state.has_trait("eyes"), "fish keeps googly eyes")
+	_check(state.current_stage()["name"] == "Multicellular", "trunk ends at Multicellular")
+	_check(state.has_trait("multi") and state.has_trait("eyes"), "trunk keeps googly eyes")
 	_check(state.awaiting_lineage_choice(), "awaiting_lineage_choice true at maxed trunk")
 	_check(not state.can_evolve(), "cannot evolve trunk further while awaiting a lineage choice")
 	_check(not state.has_won, "not won yet — fish is a fork, not an ending")
@@ -134,9 +134,9 @@ func _test_biomes() -> void:
 	state.reset()
 	state.add_biomass(EvolutionData.stage(EvolutionData.count() - 1)["cost"])
 	_drive_to_max_trunk(state)
-	# At the fish stage (8) the biome index is 8/3 = 2 -> Open Ocean.
-	_check(state.biome_index() == 2, "open ocean biome at fish stage")
-	_check(state.biome_name() == "Open Ocean", "biome name at fish stage")
+	# At the end of the trunk (Multicellular, index 6) the biome index is 6/3 = 2 -> Open Ocean.
+	_check(state.biome_index() == 2, "open ocean biome at trunk's end")
+	_check(state.biome_name() == "Open Ocean", "biome name at trunk's end")
 
 func _test_save() -> void:
 	# Roundtrip a snapshot (including a lineage in progress) through the save file.

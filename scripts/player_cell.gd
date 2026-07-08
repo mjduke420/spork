@@ -271,7 +271,23 @@ func _rebuild_eyes() -> void:
 		eye.setup(sclera, pupil)
 		_eyes.append(eye)
 
+## Pushes each eye further from the pair's midpoint as the creature grows past
+## its starting radius, on top of the plain radius-proportional offsets below —
+## without this, bigger stages/lineages keep the same relative eye spacing and
+## start to look too close-set on a much bigger silhouette.
+const BASE_RADIUS := 34.0
+const MAX_EXTRA_WIDEN := 0.5   # up to +50% spread at large sizes
+
 func _eye_offsets() -> Array[Vector2]:
+	var offsets := _base_eye_offsets()
+	if offsets.size() != 2:
+		return offsets
+	var mid := (offsets[0] + offsets[1]) * 0.5
+	var growth := clampf((radius - BASE_RADIUS) / 100.0, 0.0, 1.0)
+	var widen := 1.0 + growth * MAX_EXTRA_WIDEN
+	return [mid + (offsets[0] - mid) * widen, mid + (offsets[1] - mid) * widen]
+
+func _base_eye_offsets() -> Array[Vector2]:
 	match _body_plan:
 		"fish":
 			# both eyes crowd the front (right) of the head, comically large

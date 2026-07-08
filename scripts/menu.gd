@@ -28,8 +28,21 @@ func _ready() -> void:
 	if _is_server_mode():
 		Net.start_dedicated_server()
 		return
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Deliberately NOT using set_anchors_preset(FULL_RECT) here: spanning anchors
+	# (0,0,1,1) plus a manually-driven `size` are ambiguous to the engine (it
+	# warns "size will be overridden" no matter how the size is set) and, worse,
+	# confirmed via a local Web-export debug build to leave this scene-root
+	# Control's own `size` at (0, 0) in practice — every full-rect-anchored
+	# child (the background, the centering container) was computing its rect
+	# against a zero-size parent instead of the real window. Default anchors
+	# are a single point (0,0,0,0), which is the supported pairing for manually
+	# driving `size` — no ambiguity, no warning.
+	size = get_viewport_rect().size
+	get_tree().root.size_changed.connect(_on_viewport_resized)
 	_build_ui()
+
+func _on_viewport_resized() -> void:
+	size = get_viewport_rect().size
 
 func _is_server_mode() -> bool:
 	return "--server" in OS.get_cmdline_args() or "--server" in OS.get_cmdline_user_args()

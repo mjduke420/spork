@@ -6,6 +6,15 @@ extends Control
 ## single-player experience the game has always had.
 
 const MAIN_SCENE := "res://scenes/main.tscn"
+const GooglyEye := preload("res://scripts/googly_eye.gd")
+
+# Matches the in-game ocean gradient (see main.gd's BG_TOP/BG_BOTTOM) so the menu
+# doesn't feel like a different app from the game it launches into.
+const BG_TOP := Color(0.06, 0.16, 0.20)
+const BG_BOTTOM := Color(0.03, 0.08, 0.12)
+const ACCENT := Color(0.45, 0.85, 0.55)   # protocell green, same as player_cell.gd's BODY_START
+
+const EYE_VIEWPORT_SIZE := Vector2i(150, 64)
 
 var _name_field: LineEdit
 var _ip_field: LineEdit
@@ -27,47 +36,51 @@ func _is_server_mode() -> bool:
 	return "--server" in OS.get_cmdline_args() or "--server" in OS.get_cmdline_user_args()
 
 func _build_ui() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.04, 0.10, 0.13)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
+	_build_background()
+
+	# CenterContainer (not a raw anchor preset on the box itself) keeps the card
+	# truly centered regardless of its size, including as it grows/shrinks when
+	# the Host/IP fields hide on web.
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
+
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", _card_style())
+	center.add_child(card)
 
 	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER)
-	box.custom_minimum_size = Vector2(360, 0)
-	box.add_theme_constant_override("separation", 10)
-	add_child(box)
+	box.custom_minimum_size = Vector2(380, 0)
+	box.add_theme_constant_override("separation", 14)
+	card.add_child(box)
+
+	_build_eyes(box)
 
 	var title := Label.new()
 	title.text = "SPORK"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 44)
-	title.add_theme_color_override("font_color", Color(0.7, 1.0, 0.8))
+	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_color_override("font_color", ACCENT)
 	box.add_child(title)
 
 	var subtitle := Label.new()
-	subtitle.text = "an idle evolution battle arena"
+	subtitle.text = "The Amoeba MOBA"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size", 16)
-	subtitle.add_theme_color_override("font_color", Color(0.6, 0.75, 0.8))
+	subtitle.add_theme_font_size_override("font_size", 18)
+	subtitle.add_theme_color_override("font_color", Color(0.65, 0.85, 0.9))
 	box.add_child(subtitle)
 
 	box.add_child(HSeparator.new())
 
 	_name_field = _labeled_field(box, "Name", "Player")
 
-	var solo_btn := Button.new()
-	solo_btn.text = "Play Solo"
-	solo_btn.custom_minimum_size = Vector2(0, 44)
+	var solo_btn := _styled_button("Play Solo")
 	solo_btn.pressed.connect(_on_solo_pressed)
 	box.add_child(solo_btn)
 
 	box.add_child(HSeparator.new())
 
-	_host_btn = Button.new()
-	_host_btn.text = "Host Game (this machine, port %d)" % Net.PORT
-	_host_btn.custom_minimum_size = Vector2(0, 44)
+	_host_btn = _styled_button("Host Game (this machine, port %d)" % Net.PORT)
 	_host_btn.pressed.connect(_on_host_pressed)
 	box.add_child(_host_btn)
 
@@ -83,9 +96,7 @@ func _build_ui() -> void:
 	_ip_field.custom_minimum_size = Vector2(0, 36)
 	box.add_child(_ip_field)
 
-	_join_btn = Button.new()
-	_join_btn.text = "Join Game"
-	_join_btn.custom_minimum_size = Vector2(0, 44)
+	_join_btn = _styled_button("Join Game")
 	_join_btn.pressed.connect(_on_join_pressed)
 	box.add_child(_join_btn)
 
@@ -102,6 +113,76 @@ func _build_ui() -> void:
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.add_theme_color_override("font_color", Color(1.0, 0.8, 0.5))
 	box.add_child(_status)
+
+## A pair of jiggly googly eyes above the title — reuses googly_eye.gd exactly as
+## it's drawn in-game (same trick as mini_avatar.gd), rendered into a small
+## SubViewport since this menu is Control-based UI, not a Node2D world.
+func _build_eyes(parent: Node) -> void:
+	var eyes_center := CenterContainer.new()
+	parent.add_child(eyes_center)
+
+	var vp_container := SubViewportContainer.new()
+	vp_container.custom_minimum_size = Vector2(EYE_VIEWPORT_SIZE)
+	eyes_center.add_child(vp_container)
+
+	var vp := SubViewport.new()
+	vp.size = EYE_VIEWPORT_SIZE
+	vp.transparent_bg = true
+	vp_container.add_child(vp)
+
+	var mid := Vector2(EYE_VIEWPORT_SIZE) * 0.5
+	for dx in [-34.0, 34.0]:
+		var eye := GooglyEye.new()
+		eye.position = mid + Vector2(dx, 4.0)
+		vp.add_child(eye)
+		eye.setup(28.0, 14.0)
+
+func _build_background() -> void:
+	var grad := Gradient.new()
+	grad.set_color(0, BG_TOP)
+	grad.set_color(1, BG_BOTTOM)
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill_from = Vector2(0, 0)
+	tex.fill_to = Vector2(0, 1)
+	var bg := TextureRect.new()
+	bg.texture = tex
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+
+func _card_style() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.13, 0.15, 0.85)
+	sb.border_color = Color(0.3, 0.55, 0.5)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(14)
+	sb.set_content_margin_all(28)
+	return sb
+
+func _styled_button(text: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(0, 46)
+	b.add_theme_font_size_override("font_size", 16)
+	b.add_theme_color_override("font_color", Color(0.9, 1.0, 0.95))
+	b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
+	b.add_theme_color_override("font_disabled_color", Color(0.5, 0.55, 0.55))
+	b.add_theme_stylebox_override("normal", _button_style(Color(0.09, 0.22, 0.22), Color(0.35, 0.65, 0.55)))
+	b.add_theme_stylebox_override("hover", _button_style(Color(0.13, 0.30, 0.28), Color(0.55, 0.9, 0.7)))
+	b.add_theme_stylebox_override("pressed", _button_style(Color(0.07, 0.18, 0.18), Color(0.45, 0.8, 0.65)))
+	b.add_theme_stylebox_override("disabled", _button_style(Color(0.08, 0.1, 0.1), Color(0.2, 0.25, 0.25)))
+	return b
+
+func _button_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = border
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	sb.set_content_margin_all(8)
+	return sb
 
 func _labeled_field(parent: Node, label_text: String, default_value: String) -> LineEdit:
 	var label := Label.new()

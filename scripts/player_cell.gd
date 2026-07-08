@@ -30,6 +30,9 @@ var _last_hp: float = 0.0
 
 const SPIKE_TICK := 0.4       # seconds between spike ticks
 const SPIKE_REACH := 1.45     # multiple of radius the spikes cover
+const CONTACT_TICK := 0.5     # seconds between mutual body-contact PvP checks
+
+var _contact_timer: float = 0.0
 
 const POSITION_REPORT_INTERVAL := 0.05   # ~20Hz
 const STATE_REPORT_INTERVAL := 0.5       # ~2Hz — biomass/hp/stage for remote viewers
@@ -58,6 +61,7 @@ func _process(delta: float) -> void:
 	if is_local:
 		_move(delta)
 		_report_network(delta)
+		_update_contact(delta)
 	elif _has_remote_target:
 		global_position = global_position.lerp(_remote_target, clampf(delta * REMOTE_LERP_SPEED, 0.0, 1.0))
 	_update_spikes(delta)
@@ -119,6 +123,29 @@ func _update_spikes(delta: float) -> void:
 				continue
 			if other.global_position.distance_to(global_position) <= reach + other.radius:
 				Net.send_attack(other.player_id, true)
+
+## Simple body-contact PvP: touching another opted-in player hurts both of you,
+## with no click or spikes needed. Only reports the contact when this player's
+## own id is the lower of the two, so the pair isn't double-resolved (both
+## clients would otherwise independently detect the same overlap).
+func _update_contact(delta: float) -> void:
+	if not state.pvp_enabled:
+		return
+	_contact_timer -= delta
+	if _contact_timer > 0.0:
+		return
+	for p in get_tree().get_nodes_in_group("players"):
+		var other := p as Node2D
+		if other == null or other == self or not is_instance_valid(other):
+			continue
+		if other.state == null or not other.state.pvp_enabled:
+			continue
+		if player_id >= other.player_id:
+			continue
+		if other.global_position.distance_to(global_position) <= radius + other.radius:
+			_contact_timer = CONTACT_TICK
+			Net.send_contact(other.player_id)
+			return
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):

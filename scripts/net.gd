@@ -218,12 +218,53 @@ func _resolve_attack(attacker_id: int, target_id: int, via_spike: bool) -> void:
 	if not attacker.pvp_enabled or not target.pvp_enabled:
 		return
 	var dmg: float = attacker.spike_damage if via_spike else maxf(attacker.click_value, 2.0)
+	_apply_pvp_damage(attacker, target, dmg)
+	apply_combat_result.rpc(attacker_id, attacker.to_snapshot(), target_id, target.to_snapshot())
+
+func send_contact(other_id: int) -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	if multiplayer.is_server():
+		_resolve_contact(local_id, other_id)
+	else:
+		request_contact.rpc_id(1, other_id)
+
+@rpc("any_peer", "reliable")
+func request_contact(other_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_resolve_contact(multiplayer.get_remote_sender_id(), other_id)
+
+## Server-only: mutual body-contact damage between two touching PvP-enabled
+## players (distinct from _resolve_attack's one-directional click/spike-aura
+## damage — "they should do damage when they touch each other" doesn't require
+## either side to click or have spikes). Each side's own spike_damage stat hurts
+## the other; both can die from the same contact tick. Only one of the two
+## touching clients ever calls this for a given pair (player_cell.gd's
+## _update_contact only reports when its own player_id is the lower of the two),
+## so contact isn't double-resolved.
+func _resolve_contact(a_id: int, b_id: int) -> void:
+	if a_id == b_id:
+		return
+	var a: PlayerState = GameState.players.get(a_id)
+	var b: PlayerState = GameState.players.get(b_id)
+	if a == null or b == null:
+		return
+	if not a.pvp_enabled or not b.pvp_enabled:
+		return
+	_apply_pvp_damage(a, b, a.spike_damage)
+	_apply_pvp_damage(b, a, b.spike_damage)
+	apply_combat_result.rpc(a_id, a.to_snapshot(), b_id, b.to_snapshot())
+
+## Applies damage from one PlayerState to another and credits a kill/death on a
+## killing blow. Shared by _resolve_attack (one-directional) and _resolve_contact
+## (mutual).
+func _apply_pvp_damage(attacker: PlayerState, target: PlayerState, dmg: float) -> void:
 	var was_alive: bool = target.hp > 0.0
 	target.take_damage(dmg)
 	if was_alive and target.hp <= 0.0:
 		attacker.kills_players += 1
 		target.deaths += 1
-	apply_combat_result.rpc(attacker_id, attacker.to_snapshot(), target_id, target.to_snapshot())
 
 ## Broadcast to everyone (call_local so the server/attacker/target all apply it
 ## the same way) — unlike relay_state, this does NOT skip the local player, since

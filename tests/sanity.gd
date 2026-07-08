@@ -58,6 +58,7 @@ func _ready() -> void:
 	_test_biomes()
 	_test_save()
 	_test_pvp_snapshot()
+	_test_pvp_combat()
 
 	if _failures == 0:
 		print("SANITY: PASS (%d stages)" % EvolutionData.count())
@@ -184,6 +185,42 @@ func _test_pvp_snapshot() -> void:
 	_check(other.deaths == 1, "apply_snapshot restores deaths")
 
 	state.reset()
+
+## Direct coverage for Net.gd's combat resolution (_resolve_attack/_resolve_contact)
+## — these are plain functions, so they can be exercised without a live 2-peer
+## connection (which this sandbox's firewall blocks — see the plan file).
+## Registers two synthetic players in GameState.players, drives combat directly,
+## then removes them. This is the exact bug report: touching PvP-enabled players
+## must hurt BOTH of them, not just whoever initiated a click/spike.
+func _test_pvp_combat() -> void:
+	var a_id := 9001
+	var b_id := 9002
+	var a := GameState.add_player(a_id)
+	var b := GameState.add_player(b_id)
+	a.pvp_enabled = true
+	b.pvp_enabled = true
+
+	var a_hp_before: float = a.hp
+	var b_hp_before: float = b.hp
+	Net._resolve_attack(a_id, b_id, false)
+	_check(b.hp < b_hp_before, "one-directional attack damages the target")
+	_check(is_equal_approx(a.hp, a_hp_before), "one-directional attack leaves the attacker unhurt")
+
+	var a_hp_before_contact: float = a.hp
+	var b_hp_before_contact: float = b.hp
+	Net._resolve_contact(a_id, b_id)
+	_check(a.hp < a_hp_before_contact, "mutual contact damages player A")
+	_check(b.hp < b_hp_before_contact, "mutual contact damages player B")
+
+	b.pvp_enabled = false
+	var a_hp_before_off: float = a.hp
+	var b_hp_before_off: float = b.hp
+	Net._resolve_contact(a_id, b_id)
+	_check(is_equal_approx(a.hp, a_hp_before_off) and is_equal_approx(b.hp, b_hp_before_off),
+		"contact does nothing once either side turns pvp off")
+
+	GameState.remove_player(a_id)
+	GameState.remove_player(b_id)
 
 func _check(condition: bool, label: String) -> void:
 	if not condition:

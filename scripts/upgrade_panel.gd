@@ -24,7 +24,7 @@ const UPGRADE_COLORS := {
 	"dodge": Color(0.35, 0.75, 0.95),   # Faster Swim — cyan, water/speed
 }
 
-const PANEL_WIDTH := 276
+const PANEL_WIDTH := 235
 
 var _buttons: Dictionary = {}   # id -> Button
 var _header_btn: Button
@@ -53,20 +53,21 @@ func _build_ui() -> void:
 	panel.add_child(box)
 
 	_header_btn = Button.new()
-	_header_btn.custom_minimum_size = Vector2(PANEL_WIDTH, 34)
-	_header_btn.add_theme_font_size_override("font_size", 20)
+	_header_btn.custom_minimum_size = Vector2(PANEL_WIDTH, 30)
+	_header_btn.add_theme_font_size_override("font_size", 17)
 	_header_btn.add_theme_color_override("font_color", Color(0.85, 1.0, 0.9))
 	_header_btn.pressed.connect(_toggle_collapsed)
 	box.add_child(_header_btn)
 
 	_content = VBoxContainer.new()
-	_content.add_theme_constant_override("separation", 6)
+	_content.add_theme_constant_override("separation", 5)
 	box.add_child(_content)
 
 	for upg in UpgradeData.UPGRADES:
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(PANEL_WIDTH, 46)
+		btn.custom_minimum_size = Vector2(PANEL_WIDTH, 40)
 		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		btn.add_theme_font_size_override("font_size", 13)
 		btn.add_theme_color_override("font_color", Color(0.92, 1.0, 0.95))
 		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
 		btn.add_theme_color_override("font_disabled_color", Color(0.6, 0.68, 0.66))
@@ -77,7 +78,8 @@ func _build_ui() -> void:
 	_content.add_child(HSeparator.new())
 	var reset := Button.new()
 	reset.text = "Reset progress"
-	reset.custom_minimum_size = Vector2(PANEL_WIDTH, 32)
+	reset.custom_minimum_size = Vector2(PANEL_WIDTH, 28)
+	reset.add_theme_font_size_override("font_size", 13)
 	reset.pressed.connect(func(): GameState.local.reset())
 	_content.add_child(reset)
 

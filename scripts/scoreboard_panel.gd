@@ -9,15 +9,15 @@ extends CanvasLayer
 ## deaths/food_eaten all ride along on one of those — see hostile.gd's
 ## take_damage(), food.gd, and player_state.gd's take_damage()).
 ##
-## Docked top-right below the upgrade panel, toggled by clicking its header —
-## Tab used to toggle it, but Godot's own UI focus-cycling can consume Tab
-## once any Button (e.g. an upgrade) holds focus, so it silently never
-## reached this script's input handler.
+## Locked to top-center, toggled by clicking its header — Tab used to toggle
+## it, but Godot's own UI focus-cycling can consume Tab once any Button
+## (e.g. an upgrade) holds focus, so it silently never reached this script's
+## input handler.
 
 const PlayerState := preload("res://scripts/player_state.gd")
 
-const COL_WIDTHS := [140, 80, 80, 80, 90]
-const PANEL_WIDTH := 470
+const COL_WIDTHS := [120, 68, 66, 66, 78]
+const PANEL_WIDTH := 400
 
 var _header_btn: Button
 var _content: VBoxContainer
@@ -50,10 +50,10 @@ func _on_player_added(peer_id: int) -> void:
 
 func _build_ui() -> void:
 	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	panel.offset_left = -PANEL_WIDTH - 12
-	panel.offset_right = -12
-	panel.offset_top = 600   # clears the upgrade panel's full expanded height (measured ~492px) with a generous margin
+	panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	panel.offset_left = -PANEL_WIDTH * 0.5
+	panel.offset_right = PANEL_WIDTH * 0.5
+	panel.offset_top = 12
 	add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -61,20 +61,20 @@ func _build_ui() -> void:
 	panel.add_child(vbox)
 
 	_header_btn = Button.new()
-	_header_btn.custom_minimum_size = Vector2(PANEL_WIDTH, 34)
-	_header_btn.add_theme_font_size_override("font_size", 18)
+	_header_btn.custom_minimum_size = Vector2(PANEL_WIDTH, 28)
+	_header_btn.add_theme_font_size_override("font_size", 15)
 	_header_btn.add_theme_color_override("font_color", Color(0.9, 1.0, 0.8))
 	_header_btn.pressed.connect(_toggle_collapsed)
 	vbox.add_child(_header_btn)
 
 	_content = VBoxContainer.new()
-	_content.add_theme_constant_override("separation", 8)
+	_content.add_theme_constant_override("separation", 6)
 	vbox.add_child(_content)
 
 	_timer_label = Label.new()
 	_timer_label.text = _format_time(GameState.match_time_remaining)
 	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_timer_label.add_theme_font_size_override("font_size", 16)
+	_timer_label.add_theme_font_size_override("font_size", 13)
 	_timer_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
 	_content.add_child(_timer_label)
 
@@ -108,7 +108,7 @@ func _make_row(cols: Array, header: bool) -> HBoxContainer:
 		var l := Label.new()
 		l.text = str(cols[i])
 		l.custom_minimum_size = Vector2(COL_WIDTHS[i], 0)
-		l.add_theme_font_size_override("font_size", 15 if header else 14)
+		l.add_theme_font_size_override("font_size", 13 if header else 12)
 		var col: Color = Color(0.85, 0.95, 1.0) if header else Color(0.75, 0.85, 0.9)
 		l.add_theme_color_override("font_color", col)
 		row.add_child(l)

@@ -9,7 +9,7 @@ extends CanvasLayer
 const MiniAvatar := preload("res://scripts/mini_avatar.gd")
 const PlayerState := preload("res://scripts/player_state.gd")
 
-const AVATAR_SIZE := 48
+const AVATAR_SIZE := 40
 
 var _box: VBoxContainer
 var _rows: Dictionary = {}   # peer_id -> {row, name, hp, stage, state}
@@ -25,13 +25,13 @@ func _ready() -> void:
 func _build_ui() -> void:
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	panel.offset_left = 24
-	panel.offset_top = 148
+	panel.offset_left = 20
+	panel.offset_top = 124
 	add_child(panel)
 
 	_box = VBoxContainer.new()
-	_box.add_theme_constant_override("separation", 6)
-	_box.custom_minimum_size = Vector2(260, 0)
+	_box.add_theme_constant_override("separation", 5)
+	_box.custom_minimum_size = Vector2(220, 0)
 	panel.add_child(_box)
 
 func _add_row(peer_id: int) -> void:
@@ -59,21 +59,21 @@ func _add_row(peer_id: int) -> void:
 	vp.add_child(avatar)
 
 	var info := VBoxContainer.new()
-	info.custom_minimum_size = Vector2(180, 0)
+	info.custom_minimum_size = Vector2(155, 0)
 	row.add_child(info)
 
 	var name_label := Label.new()
-	name_label.add_theme_font_size_override("font_size", 14)
+	name_label.add_theme_font_size_override("font_size", 12)
 	name_label.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
 	info.add_child(name_label)
 
 	var hp_bar := ProgressBar.new()
-	hp_bar.custom_minimum_size = Vector2(0, 10)
+	hp_bar.custom_minimum_size = Vector2(0, 9)
 	hp_bar.show_percentage = false
 	info.add_child(hp_bar)
 
 	var stage_label := Label.new()
-	stage_label.add_theme_font_size_override("font_size", 12)
+	stage_label.add_theme_font_size_override("font_size", 11)
 	stage_label.add_theme_color_override("font_color", Color(0.7, 0.85, 0.9))
 	info.add_child(stage_label)
 

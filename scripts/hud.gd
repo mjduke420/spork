@@ -38,85 +38,88 @@ func _ready() -> void:
 	_on_hp_changed(GameState.local.hp, GameState.local.max_hp)
 
 func _build_ui() -> void:
-	_biomass_label = _add_label(Vector2(24, 20), 30, Color(0.85, 1.0, 0.9))
-	_stage_label = _add_label(Vector2(24, 58), 20, Color(0.7, 0.85, 0.95))
+	_biomass_label = _add_label(Vector2(20, 16), 25, Color(0.85, 1.0, 0.9))
+	_stage_label = _add_label(Vector2(20, 48), 17, Color(0.7, 0.85, 0.95))
 
 	_hp_bar = ProgressBar.new()
-	_hp_bar.position = Vector2(24, 92)
-	_hp_bar.custom_minimum_size = Vector2(240, 18)
-	_hp_bar.size = Vector2(240, 18)
+	_hp_bar.position = Vector2(20, 78)
+	_hp_bar.custom_minimum_size = Vector2(200, 15)
+	_hp_bar.size = Vector2(200, 15)
 	_hp_bar.show_percentage = false
 	_hp_bar.min_value = 0.0
 	add_child(_hp_bar)
 
 	_pvp_btn = Button.new()
-	_pvp_btn.position = Vector2(280, 88)
-	_pvp_btn.custom_minimum_size = Vector2(130, 26)
+	_pvp_btn.position = Vector2(232, 74)
+	_pvp_btn.custom_minimum_size = Vector2(108, 22)
+	_pvp_btn.add_theme_font_size_override("font_size", 13)
 	_pvp_btn.toggle_mode = true
 	_pvp_btn.button_pressed = GameState.local.pvp_enabled
 	_pvp_btn.pressed.connect(_on_pvp_toggled)
 	add_child(_pvp_btn)
 	_refresh_pvp_button()
 
-	_toast = _add_label(Vector2(24, 118), 20, Color(1.0, 0.5, 0.45))
+	_toast = _add_label(Vector2(20, 100), 17, Color(1.0, 0.5, 0.45))
 	_toast.visible = false
 
 	_help = Label.new()
 	_help.text = "WASD to move. Click the blob to feed it and grow.  Click enemies to fight them off.\nEvolve googly eyes first!"
 	_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_help.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_help.offset_left = -400
-	_help.offset_right = 400
-	_help.offset_top = 60
-	_help.add_theme_font_size_override("font_size", 20)
+	_help.offset_left = -340
+	_help.offset_right = 340
+	_help.offset_top = 50
+	_help.add_theme_font_size_override("font_size", 17)
 	_help.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
 	add_child(_help)
 
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	panel.offset_top = -96
+	panel.offset_top = -82
 	panel.offset_left = 0
 	panel.offset_right = 0
 	add_child(panel)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
+	row.add_theme_constant_override("separation", 14)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(row)
 
 	_bar_stack = VBoxContainer.new()
-	_bar_stack.custom_minimum_size = Vector2(560, 0)
+	_bar_stack.custom_minimum_size = Vector2(460, 0)
 	row.add_child(_bar_stack)
-	_bar_label = _child_label(_bar_stack, 16, Color(0.9, 0.95, 1.0))
+	_bar_label = _child_label(_bar_stack, 14, Color(0.9, 0.95, 1.0))
 	_bar = ProgressBar.new()
-	_bar.custom_minimum_size = Vector2(560, 26)
+	_bar.custom_minimum_size = Vector2(460, 22)
 	_bar.show_percentage = false
 	_bar.min_value = 0.0
 	_bar.max_value = 1.0
 	_bar_stack.add_child(_bar)
 
 	_evolve_btn = Button.new()
-	_evolve_btn.custom_minimum_size = Vector2(220, 60)
+	_evolve_btn.custom_minimum_size = Vector2(185, 50)
+	_evolve_btn.add_theme_font_size_override("font_size", 14)
 	_evolve_btn.pressed.connect(_on_evolve_pressed)
 	row.add_child(_evolve_btn)
 
 	_lineage_row = HBoxContainer.new()
-	_lineage_row.add_theme_constant_override("separation", 16)
+	_lineage_row.add_theme_constant_override("separation", 14)
 	_lineage_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_lineage_row.visible = false
 	panel.add_child(_lineage_row)
 	for id in EvolutionData.lineage_ids():
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(240, 70)
+		btn.custom_minimum_size = Vector2(200, 58)
 		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		btn.add_theme_font_size_override("font_size", 13)
 		btn.pressed.connect(_on_choose_lineage.bind(id))
 		_lineage_row.add_child(btn)
 		_lineage_buttons[id] = btn
 
 	_win_banner = Label.new()
 	_win_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_win_banner.offset_top = 120
-	_win_banner.add_theme_font_size_override("font_size", 40)
+	_win_banner.offset_top = 100
+	_win_banner.add_theme_font_size_override("font_size", 34)
 	_win_banner.add_theme_color_override("font_color", Color(1.0, 0.95, 0.5))
 	_win_banner.visible = false
 	add_child(_win_banner)

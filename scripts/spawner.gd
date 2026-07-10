@@ -2,11 +2,13 @@ extends Node2D
 
 ## Spawns hostiles and food pellets on a ring around the players' current position
 ## (not the viewport, since the world is a bigger arena the camera pans around).
-## Composition and rate scale with the local player's evolution stage so the world
-## gets more dangerous as you grow.
+## Composition and rate scale with the local player's progress so the world gets
+## more dangerous — and more physically imposing — as you grow.
 
 const Hostile := preload("res://scripts/hostile.gd")
 const Food := preload("res://scripts/food.gd")
+const EvolutionData := preload("res://scripts/evolution_data.gd")
+const PlayerState := preload("res://scripts/player_state.gd")
 
 const SPAWN_MARGIN := 260.0   # spawn just outside the player's current view
 const MAX_HOSTILES := 14
@@ -26,9 +28,20 @@ func _process(delta: float) -> void:
 		if get_tree().get_nodes_in_group("food").size() < 10:
 			_spawn_food()
 
+## A continuously-increasing progress scalar used for hostile scaling. Plain
+## stage_index freezes at the top of the trunk (Multicellular) the moment a
+## lineage is chosen, which would leave the entire endgame lineage grind —
+## most of a match's biomass grinding — facing the same hostiles forever.
+## Once a lineage is picked, branch_step (0..2) keeps it climbing instead.
+func _progress_level() -> float:
+	var state: PlayerState = GameState.local
+	if state.lineage == "":
+		return float(state.stage_index)
+	return float(EvolutionData.count() - 1) + float(state.branch_step + 1) * 2.0
+
 func _rate_scale() -> float:
-	# higher stages spawn a little faster (never below ~0.6x interval)
-	return maxf(0.6, 1.0 - GameState.local.stage_index * 0.05)
+	# higher progress spawns a little faster (never below ~0.55x interval)
+	return maxf(0.55, 1.0 - _progress_level() * 0.035)
 
 func _spawn_hostile() -> void:
 	var h: Node2D = Hostile.new()
@@ -43,16 +56,16 @@ func _spawn_food() -> void:
 	f.setup(3.0 + GameState.local.stage_index * 2.0)
 
 func _pick_config() -> Dictionary:
-	var stage: int = GameState.local.stage_index
+	var p := _progress_level()
 	var roll := randf()
 	# apex only starts appearing once you have some defenses
-	if stage >= 4 and roll < 0.2:
+	if p >= 4.0 and roll < 0.2:
 		return _scaled({
 			"kind": Hostile.Kind.APEX, "radius": 34.0, "speed": 34.0,
 			"hp": 40.0, "bite_hp": 10.0, "bite_biomass": 30.0, "reward": 45.0,
 			"color": Color(0.75, 0.25, 0.45),
 		})
-	if stage >= 2 and roll < 0.65:
+	if p >= 2.0 and roll < 0.65:
 		return _scaled({
 			"kind": Hostile.Kind.PREDATOR, "radius": 20.0, "speed": 48.0,
 			"hp": 12.0, "bite_hp": 4.0, "bite_biomass": 10.0, "reward": 14.0,
@@ -64,12 +77,24 @@ func _pick_config() -> Dictionary:
 		"color": Color(0.85, 0.8, 0.4),
 	})
 
+## Hostiles grow substantially bigger, tougher, and more rewarding as the
+## player progresses. Size scales more gently than the underlying stats so a
+## max-progress hostile reads as genuinely huge without blotting out the
+## screen; threat (hp/bite damage) and value (reward/stolen biomass) scale
+## steeply so death stays a real risk and late hostiles are worth grinding —
+## both were previously left almost flat once a lineage was chosen.
 func _scaled(cfg: Dictionary) -> Dictionary:
-	# grow hp/reward gently with stage so late hostiles stay relevant
-	var f := 1.0 + GameState.local.stage_index * 0.18
-	cfg["hp"] = float(cfg["hp"]) * f
-	cfg["reward"] = float(cfg["reward"]) * f
-	cfg["bite_biomass"] = float(cfg["bite_biomass"]) * f
+	var p := _progress_level()
+	var size_mult := 1.0 + p * 0.22
+	var speed_mult := 1.0 + p * 0.08
+	var threat_mult := 1.0 + p * 0.6
+	var reward_mult := 1.0 + p * 0.55
+	cfg["radius"] = float(cfg["radius"]) * size_mult
+	cfg["speed"] = float(cfg["speed"]) * speed_mult
+	cfg["hp"] = float(cfg["hp"]) * threat_mult
+	cfg["bite_hp"] = float(cfg["bite_hp"]) * threat_mult
+	cfg["bite_biomass"] = float(cfg["bite_biomass"]) * reward_mult
+	cfg["reward"] = float(cfg["reward"]) * reward_mult
 	return cfg
 
 ## Spawns on a ring just outside the current viewport around the players' average

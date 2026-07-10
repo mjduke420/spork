@@ -2,6 +2,7 @@ extends CanvasLayer
 
 ## Right-side panel listing repeatable upgrades. Reactive: rebinds to GameState signals
 ## and refreshes button labels/affordability whenever biomass or upgrade levels change.
+## Collapsible — clicking the header toggles the button list beneath it.
 ##
 ## Each upgrade has its own accent color; a button's background/border lerp from
 ## a neutral base toward that accent as its level climbs from 0 to MAX_COLOR_LEVEL
@@ -23,7 +24,12 @@ const UPGRADE_COLORS := {
 	"dodge": Color(0.35, 0.75, 0.95),   # Faster Swim — cyan, water/speed
 }
 
+const PANEL_WIDTH := 276
+
 var _buttons: Dictionary = {}   # id -> Button
+var _header_btn: Button
+var _content: VBoxContainer
+var _collapsed: bool = false
 
 func _ready() -> void:
 	layer = 10
@@ -36,39 +42,54 @@ func _ready() -> void:
 func _build_ui() -> void:
 	var panel := PanelContainer.new()
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	panel.offset_left = -288
+	panel.offset_left = -PANEL_WIDTH - 12
 	panel.offset_right = -12
 	panel.offset_top = 12
 	add_child(panel)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 6)
-	box.custom_minimum_size = Vector2(276, 0)
+	box.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
 	panel.add_child(box)
 
-	var title := Label.new()
-	title.text = "UPGRADES"
-	title.add_theme_font_size_override("font_size", 20)
-	title.add_theme_color_override("font_color", Color(0.85, 1.0, 0.9))
-	box.add_child(title)
+	_header_btn = Button.new()
+	_header_btn.custom_minimum_size = Vector2(PANEL_WIDTH, 34)
+	_header_btn.add_theme_font_size_override("font_size", 20)
+	_header_btn.add_theme_color_override("font_color", Color(0.85, 1.0, 0.9))
+	_header_btn.pressed.connect(_toggle_collapsed)
+	box.add_child(_header_btn)
+
+	_content = VBoxContainer.new()
+	_content.add_theme_constant_override("separation", 6)
+	box.add_child(_content)
 
 	for upg in UpgradeData.UPGRADES:
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(276, 46)
+		btn.custom_minimum_size = Vector2(PANEL_WIDTH, 46)
 		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		btn.add_theme_color_override("font_color", Color(0.92, 1.0, 0.95))
 		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
 		btn.add_theme_color_override("font_disabled_color", Color(0.6, 0.68, 0.66))
 		btn.pressed.connect(_on_buy.bind(upg["id"]))
-		box.add_child(btn)
+		_content.add_child(btn)
 		_buttons[upg["id"]] = btn
 
-	box.add_child(HSeparator.new())
+	_content.add_child(HSeparator.new())
 	var reset := Button.new()
 	reset.text = "Reset progress"
-	reset.custom_minimum_size = Vector2(276, 32)
+	reset.custom_minimum_size = Vector2(PANEL_WIDTH, 32)
 	reset.pressed.connect(func(): GameState.local.reset())
-	box.add_child(reset)
+	_content.add_child(reset)
+
+	_apply_collapsed()
+
+func _toggle_collapsed() -> void:
+	_collapsed = not _collapsed
+	_apply_collapsed()
+
+func _apply_collapsed() -> void:
+	_content.visible = not _collapsed
+	_header_btn.text = "%s  UPGRADES" % ("▶" if _collapsed else "▼")
 
 func _on_buy(id: String) -> void:
 	GameState.local.buy_upgrade(id)

@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-## Tab-toggled scoreboard: every connected player's total upgrade level, kills
+## Collapsible scoreboard: every connected player's total upgrade level, kills
 ## (hostiles + players combined), deaths, and food eaten — sorted by kills
 ## descending, classic scoreboard-style. A live match countdown sits above the
 ## table (see GameState.match_time_remaining / net.gd for who ticks it and
@@ -8,15 +8,22 @@ extends CanvasLayer
 ## and any player's biomass/evolved/hp_changed/upgrades_changed signals (kills/
 ## deaths/food_eaten all ride along on one of those — see hostile.gd's
 ## take_damage(), food.gd, and player_state.gd's take_damage()).
+##
+## Docked top-right below the upgrade panel, toggled by clicking its header —
+## Tab used to toggle it, but Godot's own UI focus-cycling can consume Tab
+## once any Button (e.g. an upgrade) holds focus, so it silently never
+## reached this script's input handler.
 
 const PlayerState := preload("res://scripts/player_state.gd")
 
-const COL_WIDTHS := [170, 90, 90, 90, 100]
+const COL_WIDTHS := [140, 80, 80, 80, 90]
+const PANEL_WIDTH := 470
 
-var _panel: PanelContainer
+var _header_btn: Button
+var _content: VBoxContainer
 var _timer_label: Label
 var _list: VBoxContainer
-var _open: bool = false
+var _collapsed: bool = true
 
 func _ready() -> void:
 	layer = 11
@@ -28,16 +35,8 @@ func _ready() -> void:
 	_refresh()
 
 func _process(_delta: float) -> void:
-	if _open:
+	if not _collapsed:
 		_timer_label.text = _format_time(GameState.match_time_remaining)
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
-		_open = not _open
-		_panel.visible = _open
-		if _open:
-			_refresh()
-		get_viewport().set_input_as_handled()
 
 func _on_player_added(peer_id: int) -> void:
 	var state: PlayerState = GameState.players.get(peer_id)
@@ -50,36 +49,53 @@ func _on_player_added(peer_id: int) -> void:
 	_refresh()
 
 func _build_ui() -> void:
-	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.custom_minimum_size = Vector2(560, 0)
-	_panel.visible = false
-	add_child(_panel)
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	panel.offset_left = -PANEL_WIDTH - 12
+	panel.offset_right = -12
+	panel.offset_top = 600   # clears the upgrade panel's full expanded height (measured ~492px) with a generous margin
+	add_child(panel)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
-	_panel.add_child(vbox)
+	panel.add_child(vbox)
 
-	var title := Label.new()
-	title.text = "SCOREBOARD   (Tab to close)"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 22)
-	title.add_theme_color_override("font_color", Color(0.9, 1.0, 0.8))
-	vbox.add_child(title)
+	_header_btn = Button.new()
+	_header_btn.custom_minimum_size = Vector2(PANEL_WIDTH, 34)
+	_header_btn.add_theme_font_size_override("font_size", 18)
+	_header_btn.add_theme_color_override("font_color", Color(0.9, 1.0, 0.8))
+	_header_btn.pressed.connect(_toggle_collapsed)
+	vbox.add_child(_header_btn)
+
+	_content = VBoxContainer.new()
+	_content.add_theme_constant_override("separation", 8)
+	vbox.add_child(_content)
 
 	_timer_label = Label.new()
 	_timer_label.text = _format_time(GameState.match_time_remaining)
 	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_timer_label.add_theme_font_size_override("font_size", 16)
 	_timer_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
-	vbox.add_child(_timer_label)
+	_content.add_child(_timer_label)
 
-	vbox.add_child(_make_row(["Name", "Level", "Kills", "Deaths", "Food Eaten"], true))
-	vbox.add_child(HSeparator.new())
+	_content.add_child(_make_row(["Name", "Level", "Kills", "Deaths", "Food Eaten"], true))
+	_content.add_child(HSeparator.new())
 
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 4)
-	vbox.add_child(_list)
+	_content.add_child(_list)
+
+	_apply_collapsed()
+
+func _toggle_collapsed() -> void:
+	_collapsed = not _collapsed
+	_apply_collapsed()
+	if not _collapsed:
+		_refresh()
+
+func _apply_collapsed() -> void:
+	_content.visible = not _collapsed
+	_header_btn.text = "%s  SCOREBOARD" % ("▶" if _collapsed else "▼")
 
 func _format_time(seconds: float) -> String:
 	var s := maxi(0, int(ceil(seconds)))

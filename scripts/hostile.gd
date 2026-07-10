@@ -106,6 +106,7 @@ func take_damage(dmg: float) -> void:
 		var payee = _player.state if is_instance_valid(_player) else GameState.local
 		payee.add_biomass(reward)
 		payee.kills_hostiles += 1
+		Sfx.play_bloop()
 		queue_free()
 
 func knockback(impulse: Vector2) -> void:

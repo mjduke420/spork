@@ -214,6 +214,7 @@ func _try_attack() -> void:
 
 func _on_clicked() -> void:
 	state.add_biomass(state.click_value)
+	Sfx.play_bloop()
 	_squish = 1.0
 	_kick_eyes(340.0)
 
@@ -226,6 +227,8 @@ func _on_hp_changed(hp: float, _max_hp: float) -> void:
 	# only jolt the eyes when HP actually drops (a hit), not on passive regen
 	if hp < _last_hp - 0.01:
 		_kick_eyes(220.0)
+		if is_local:
+			Sfx.play_bloop()
 	_last_hp = hp
 
 func _on_died() -> void:

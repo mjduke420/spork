@@ -59,6 +59,7 @@ func _ready() -> void:
 	_test_save()
 	_test_pvp_snapshot()
 	_test_pvp_combat()
+	_test_death_and_match_reset()
 
 	if _failures == 0:
 		print("SANITY: PASS (%d stages)" % EvolutionData.count())
@@ -221,6 +222,82 @@ func _test_pvp_combat() -> void:
 
 	GameState.remove_player(a_id)
 	GameState.remove_player(b_id)
+
+## Covers the newer death/scoreboard mechanics: a hostile-caused death is
+## still the old forgiving soft reset (half biomass, progress kept); a
+## player-caused death fully wipes progress but keeps the running scoreboard
+## totals; reset_for_new_match() wipes the totals too; and total_upgrade_levels/
+## food_eaten round-trip through the network snapshot.
+func _test_death_and_match_reset() -> void:
+	var state := GameState.local
+	state.reset()
+
+	# --- hostile death: soft reset, progress kept ---
+	state.add_biomass(EvolutionData.stage(1)["cost"])
+	state.evolve()
+	state.add_biomass(200.0)
+	state.kills_hostiles = 3
+	state.food_eaten = 4
+	var stage_before_hostile_death := state.stage_index
+	var biomass_before_hostile_death := state.biomass
+	var deaths_before := state.deaths
+	state.take_damage(state.max_hp + 1.0)   # from_player defaults false
+	_check(state.stage_index == stage_before_hostile_death, "hostile death keeps evolution progress")
+	_check(is_equal_approx(state.biomass, floorf(biomass_before_hostile_death * 0.5)), "hostile death halves biomass")
+	_check(state.deaths == deaths_before + 1, "hostile death still counts as a death")
+	_check(state.kills_hostiles == 3 and state.food_eaten == 4, "hostile death keeps scoreboard totals")
+
+	# --- player-caused death: full progress reset, scoreboard totals kept ---
+	state.add_biomass(500.0)
+	var deaths_before_pvp := state.deaths
+	state.take_damage(state.max_hp + 1.0, true)
+	_check(state.stage_index == 0, "PvP death resets stage_index to 0")
+	_check(state.biomass == 0.0, "PvP death resets biomass to 0")
+	_check(state.lineage == "" and state.branch_step == -1, "PvP death clears lineage")
+	_check(state.deaths == deaths_before_pvp + 1, "PvP death also counts as a death")
+	_check(state.kills_hostiles == 3 and state.food_eaten == 4, "PvP death keeps scoreboard totals")
+
+	# --- total_upgrade_levels + food_eaten round-trip through snapshot ---
+	state.add_biomass(state.upgrade_cost("click") + state.upgrade_cost("hp"))
+	state.buy_upgrade("click")
+	state.buy_upgrade("hp")
+	_check(state.total_upgrade_levels() == 2, "total_upgrade_levels sums across upgrades")
+	var snap := state.to_snapshot()
+	_check(int(snap.get("food_eaten", -1)) == 4, "to_snapshot includes food_eaten")
+	var other := PlayerState.new()
+	other.apply_snapshot(snap)
+	_check(other.food_eaten == 4, "apply_snapshot restores food_eaten")
+	_check(other.total_upgrade_levels() == 2, "apply_snapshot restores upgrade levels")
+
+	# --- a full match restart wipes progress AND the scoreboard totals ---
+	state.reset_for_new_match()
+	_check(state.stage_index == 0 and state.biomass == 0.0, "match restart resets progress")
+	_check(state.kills_hostiles == 0 and state.food_eaten == 0 and state.deaths == 0,
+		"match restart also zeroes scoreboard totals")
+
+	# --- a killing PvP blow via Net._resolve_attack fully resets the target ---
+	var a_id := 9003
+	var b_id := 9004
+	var a := GameState.add_player(a_id)
+	var b := GameState.add_player(b_id)
+	a.pvp_enabled = true
+	b.pvp_enabled = true
+	b.add_biomass(EvolutionData.stage(1)["cost"])
+	b.evolve()
+	b.kills_hostiles = 5
+	# take_damage(dmg, true) restores hp to max_hp as PART of the reset, so
+	# "attack until hp <= 0" would loop forever — a fixed number of hits
+	# (well beyond max_hp / a single click's damage) is enough to guarantee
+	# at least one killing blow landed somewhere in the sequence.
+	for i in 20:
+		Net._resolve_attack(a_id, b_id, false)
+	_check(b.stage_index == 0, "a killing PvP blow resets the victim's stage")
+	_check(b.kills_hostiles == 5, "a killing PvP blow keeps the victim's scoreboard totals")
+	_check(a.kills_players >= 1, "the killer's kills_players is credited")
+	GameState.remove_player(a_id)
+	GameState.remove_player(b_id)
+
+	state.reset()
 
 func _check(condition: bool, label: String) -> void:
 	if not condition:

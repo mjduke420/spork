@@ -31,11 +31,13 @@ var hp: float = 20.0
 var has_won: bool = false
 var upgrade_levels: Dictionary = {}   # upgrade id -> int level
 
-# Scoreboard counters (Phase 3 wires these up; kept here now so the network
-# snapshot shape is stable across phases).
+# Scoreboard counters. These accumulate for the whole match and are only
+# zeroed by reset_for_new_match() — a PvP-death reset (see take_damage())
+# wipes evolution progress but keeps the running tally.
 var kills_hostiles: int = 0
 var kills_players: int = 0
 var deaths: int = 0
+var food_eaten: int = 0
 
 # Opt-in PvP (Phase 4): a player can only be attacked by another player if BOTH
 # have this set — see Net.request_attack_player().
@@ -91,18 +93,32 @@ func add_biomass(amount: float) -> void:
 	biomass = maxf(0.0, biomass + amount)
 	biomass_changed.emit(biomass)
 
-## Apply combat damage. Reaching 0 HP is a forgiving setback: you lose half your
-## biomass and get restored to full HP, but keep your evolution progress.
-func take_damage(dmg: float) -> void:
+## Apply combat damage. Reaching 0 HP from a hostile is a forgiving setback:
+## you lose half your biomass and get restored to full HP, but keep your
+## evolution progress. Reaching 0 HP from ANOTHER PLAYER is harsher — you
+## restart entirely (a fresh spawn) — to make PvP kills feel consequential.
+## Either way, the death counts toward the scoreboard's running total.
+## Returns true if this call was the killing blow — hp gets restored to
+## max_hp as PART of the death handling either way, so a caller can't tell
+## by inspecting hp afterward (net.gd's kill-credit logic relies on this).
+func take_damage(dmg: float, from_player: bool = false) -> bool:
 	if dmg <= 0.0:
-		return
+		return false
 	hp = maxf(0.0, hp - dmg)
+	var killed := false
 	if hp <= 0.0:
-		biomass = floorf(biomass * 0.5)
-		hp = max_hp
+		killed = true
+		deaths += 1
+		if from_player:
+			_clear_progress()
+			evolved.emit()
+		else:
+			biomass = floorf(biomass * 0.5)
+			hp = max_hp
 		died.emit()
 		biomass_changed.emit(biomass)
 	hp_changed.emit(hp, max_hp)
+	return killed
 
 # ---- evolution: linear trunk, then a chosen branching lineage ----
 
@@ -194,6 +210,14 @@ func upgrade_cost(id: String) -> float:
 func can_buy_upgrade(id: String) -> bool:
 	return biomass >= upgrade_cost(id)
 
+## Sum of every upgrade's level — the scoreboard's "Level" stat, a distinct
+## measure of investment from the evolution stage (already shown as "form").
+func total_upgrade_levels() -> int:
+	var total := 0
+	for lvl in upgrade_levels.values():
+		total += int(lvl)
+	return total
+
 func buy_upgrade(id: String) -> bool:
 	if not can_buy_upgrade(id):
 		return false
@@ -234,6 +258,7 @@ func to_snapshot() -> Dictionary:
 		"kills_hostiles": kills_hostiles,
 		"kills_players": kills_players,
 		"deaths": deaths,
+		"food_eaten": food_eaten,
 		"pvp_enabled": pvp_enabled,
 	}
 
@@ -253,6 +278,7 @@ func apply_snapshot(data: Dictionary) -> void:
 	kills_hostiles = int(data.get("kills_hostiles", kills_hostiles))
 	kills_players = int(data.get("kills_players", kills_players))
 	deaths = int(data.get("deaths", deaths))
+	food_eaten = int(data.get("food_eaten", food_eaten))
 	pvp_enabled = bool(data.get("pvp_enabled", pvp_enabled))
 	_recalc()
 	biomass_changed.emit(biomass)
@@ -299,7 +325,12 @@ func _load_save() -> void:
 		for id in saved:
 			upgrade_levels[str(id)] = maxi(0, int(saved[id]))
 
-func reset() -> void:
+## Wipes evolution progress (stage/lineage/biomass/upgrades) without touching
+## the scoreboard counters (kills/deaths/food_eaten) — those are per-match
+## totals that only reset_for_new_match() clears. Shared by the "Reset
+## progress" button, a PvP death, and a full match restart. Emits nothing
+## itself; callers emit whatever signals fit their own context.
+func _clear_progress() -> void:
 	biomass = 0.0
 	stage_index = 0
 	lineage = ""
@@ -309,6 +340,24 @@ func reset() -> void:
 	_recalc()
 	hp = max_hp
 	SaveSystem.clear()
+
+func reset() -> void:
+	_clear_progress()
+	biomass_changed.emit(biomass)
+	evolved.emit()
+	hp_changed.emit(hp, max_hp)
+	upgrades_changed.emit()
+	biome_changed.emit(biome_index())
+
+## Called when the 10-minute match timer expires and a new match begins:
+## wipes progress AND the scoreboard totals for a clean new round, unlike a
+## PvP death (which only wipes progress, keeping the running tally).
+func reset_for_new_match() -> void:
+	_clear_progress()
+	kills_hostiles = 0
+	kills_players = 0
+	deaths = 0
+	food_eaten = 0
 	biomass_changed.emit(biomass)
 	evolved.emit()
 	hp_changed.emit(hp, max_hp)

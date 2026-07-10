@@ -1,16 +1,20 @@
 extends CanvasLayer
 
-## Tab-toggled scoreboard: every connected player's name, current form, biomass
-## (a proxy for "who has grown the most"), and kill/death counters. Sorted by
-## biomass descending. Rebuilds off GameState.player_added/player_removed and any
-## player's biomass/evolved/hp_changed signals (kills/deaths ride along on the
-## biomass_changed emitted right beside them — see hostile.gd's take_damage()).
+## Tab-toggled scoreboard: every connected player's total upgrade level, kills
+## (hostiles + players combined), deaths, and food eaten — sorted by kills
+## descending, classic scoreboard-style. A live match countdown sits above the
+## table (see GameState.match_time_remaining / net.gd for who ticks it and
+## what happens at zero). Rebuilds off GameState.player_added/player_removed
+## and any player's biomass/evolved/hp_changed/upgrades_changed signals (kills/
+## deaths/food_eaten all ride along on one of those — see hostile.gd's
+## take_damage(), food.gd, and player_state.gd's take_damage()).
 
 const PlayerState := preload("res://scripts/player_state.gd")
 
-const COL_WIDTHS := [170, 150, 100, 70, 90, 70]
+const COL_WIDTHS := [170, 90, 90, 90, 100]
 
 var _panel: PanelContainer
+var _timer_label: Label
 var _list: VBoxContainer
 var _open: bool = false
 
@@ -22,6 +26,10 @@ func _ready() -> void:
 	for peer_id in GameState.players.keys():
 		_on_player_added(peer_id)
 	_refresh()
+
+func _process(_delta: float) -> void:
+	if _open:
+		_timer_label.text = _format_time(GameState.match_time_remaining)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
@@ -38,12 +46,13 @@ func _on_player_added(peer_id: int) -> void:
 	state.biomass_changed.connect(func(_b): _refresh())
 	state.evolved.connect(_refresh)
 	state.hp_changed.connect(func(_h, _m): _refresh())
+	state.upgrades_changed.connect(_refresh)
 	_refresh()
 
 func _build_ui() -> void:
 	_panel = PanelContainer.new()
 	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.custom_minimum_size = Vector2(620, 0)
+	_panel.custom_minimum_size = Vector2(560, 0)
 	_panel.visible = false
 	add_child(_panel)
 
@@ -58,12 +67,24 @@ func _build_ui() -> void:
 	title.add_theme_color_override("font_color", Color(0.9, 1.0, 0.8))
 	vbox.add_child(title)
 
-	vbox.add_child(_make_row(["Name", "Form", "Biomass", "Kills", "PvP Kills", "Deaths"], true))
+	_timer_label = Label.new()
+	_timer_label.text = _format_time(GameState.match_time_remaining)
+	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timer_label.add_theme_font_size_override("font_size", 16)
+	_timer_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+	vbox.add_child(_timer_label)
+
+	vbox.add_child(_make_row(["Name", "Level", "Kills", "Deaths", "Food Eaten"], true))
 	vbox.add_child(HSeparator.new())
 
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 4)
 	vbox.add_child(_list)
+
+func _format_time(seconds: float) -> String:
+	var s := maxi(0, int(ceil(seconds)))
+	@warning_ignore("integer_division")
+	return "Match ends in %02d:%02d" % [s / 60, s % 60]
 
 func _make_row(cols: Array, header: bool) -> HBoxContainer:
 	var row := HBoxContainer.new()
@@ -83,15 +104,18 @@ func _refresh() -> void:
 	var entries: Array = []
 	for peer_id in GameState.players.keys():
 		entries.append([peer_id, GameState.players[peer_id]])
-	entries.sort_custom(func(a, b): return a[1].biomass > b[1].biomass)
+	entries.sort_custom(func(a, b):
+		var ka: int = a[1].kills_hostiles + a[1].kills_players
+		var kb: int = b[1].kills_hostiles + b[1].kills_players
+		return ka > kb)
 	for pair in entries:
 		var peer_id: int = pair[0]
 		var state: PlayerState = pair[1]
 		var name_str: String = state.player_name
 		if peer_id == GameState.local_id:
 			name_str += " (you)"
-		var form: String = str(state.current_stage().get("name", "?"))
+		var total_kills := state.kills_hostiles + state.kills_players
 		_list.add_child(_make_row([
-			name_str, form, String.num(floorf(state.biomass), 0),
-			str(state.kills_hostiles), str(state.kills_players), str(state.deaths),
+			name_str, str(state.total_upgrade_levels()), str(total_kills),
+			str(state.deaths), str(state.food_eaten),
 		], false))

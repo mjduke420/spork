@@ -11,6 +11,9 @@ const PlayerState := preload("res://scripts/player_state.gd")
 
 const MAX_PLAYERS := 8
 const ARENA_RADIUS := 1400.0
+const MATCH_DURATION := 600.0   # 10 minutes; see Net.gd for the countdown/restart logic
+
+var match_time_remaining: float = MATCH_DURATION
 
 signal player_added(peer_id: int)
 signal player_removed(peer_id: int)

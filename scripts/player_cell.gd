@@ -56,6 +56,8 @@ var _ooze_timer: float = 0.0
 var _last_ooze_pos: Vector2 = Vector2.ZERO
 var _ooze_pos_initialized: bool = false
 
+var _last_stage_index: int = 0
+
 func _ready() -> void:
 	if state == null:
 		state = GameState.local
@@ -64,6 +66,7 @@ func _ready() -> void:
 	state.hp_changed.connect(_on_hp_changed)
 	state.died.connect(_on_died)
 	_last_hp = state.hp
+	_last_stage_index = state.stage_index
 	_apply_stage()
 
 func _process(delta: float) -> void:
@@ -93,6 +96,14 @@ func _move(delta: float) -> void:
 		return
 	global_position += dir * state.move_speed * delta
 	global_position = global_position.limit_length(GameState.ARENA_RADIUS - radius * 0.5)
+
+## Uniform-random point within the arena (kept off the very edge) — used to
+## respawn a player whose progress just got wiped by a PvP death or match
+## restart, so they don't reappear exactly where they died.
+func _random_arena_position() -> Vector2:
+	var r := GameState.ARENA_RADIUS * 0.85 * sqrt(randf())
+	var a := randf() * TAU
+	return Vector2(cos(a), sin(a)) * r
 
 ## Broadcasts this (local) player's position at ~20Hz and full economy/evolution
 ## state at ~2Hz so remote peers see us move and evolve. No-ops in single-player
@@ -222,6 +233,15 @@ func _on_evolved() -> void:
 	_apply_stage()
 	_squish = 1.0
 	_kick_eyes(520.0)
+	# A stage_index that just went DOWN (not the normal up-only progression)
+	# means our progress got wiped — a PvP death or a match restart, both of
+	# which route through this same signal (directly, or via apply_snapshot's
+	# own evolved.emit()). Only the local player repositions themselves;
+	# everyone else's move is just whatever position they broadcast next.
+	if is_local and state.stage_index < _last_stage_index:
+		global_position = _random_arena_position()
+		Net.send_position(global_position)
+	_last_stage_index = state.stage_index
 
 func _on_hp_changed(hp: float, _max_hp: float) -> void:
 	# only jolt the eyes when HP actually drops (a hit), not on passive regen

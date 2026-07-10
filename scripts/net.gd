@@ -29,6 +29,52 @@ var is_dedicated_server: bool = false
 
 var _pending_name: String = "Player"
 
+# ---- match timer ----
+#
+# Whoever is "authoritative" (the server, or the local client in solo play —
+# there's no server there at all) ticks GameState.match_time_remaining down
+# every frame and, on hitting zero, resets everyone for a new 10-minute round.
+# Non-authoritative clients just wait for periodic sync_match_timer broadcasts
+# rather than ticking their own copy, so displayed time doesn't drift.
+
+const MATCH_TIMER_BROADCAST_INTERVAL := 1.0
+var _match_broadcast_cd: float = 0.0
+
+func _process(delta: float) -> void:
+	var authoritative := multiplayer.multiplayer_peer == null or multiplayer.is_server()
+	if not authoritative:
+		return
+	GameState.match_time_remaining = maxf(0.0, GameState.match_time_remaining - delta)
+	if GameState.match_time_remaining <= 0.0:
+		_restart_match()
+		return
+	if multiplayer.multiplayer_peer == null:
+		return
+	_match_broadcast_cd -= delta
+	if _match_broadcast_cd <= 0.0:
+		_match_broadcast_cd = MATCH_TIMER_BROADCAST_INTERVAL
+		sync_match_timer.rpc(GameState.match_time_remaining)
+
+@rpc("authority", "call_local", "reliable")
+func sync_match_timer(remaining: float) -> void:
+	GameState.match_time_remaining = remaining
+
+## Server-only (or solo-local): wipes every player back to a fresh start and
+## a new random spawn (player_cell.gd's _on_evolved() notices the stage
+## regression and teleports), keeping the running roster/timer going.
+func _restart_match() -> void:
+	for peer_id in GameState.players.keys():
+		var p: PlayerState = GameState.players[peer_id]
+		p.reset_for_new_match()
+		if multiplayer.multiplayer_peer != null:
+			apply_player_reset.rpc(peer_id, p.to_snapshot())
+	GameState.match_time_remaining = GameState.MATCH_DURATION
+
+@rpc("authority", "call_local", "reliable")
+func apply_player_reset(peer_id: int, snapshot: Dictionary) -> void:
+	if GameState.players.has(peer_id):
+		GameState.players[peer_id].apply_snapshot(snapshot)
+
 # ---- connection setup ----
 
 func host_game(pname: String) -> bool:
@@ -111,9 +157,11 @@ func request_join(pname: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if GameState.players.size() >= GameState.MAX_PLAYERS:
 		return   # arena full — the requester simply never gets an entry
-	# Catch the newcomer up on everyone already present before announcing them.
+	# Catch the newcomer up on everyone already present, and on the match
+	# clock already in progress, before announcing them.
 	for existing_id in GameState.players.keys():
 		announce_joined.rpc_id(sender, existing_id, GameState.players[existing_id].player_name)
+	sync_match_timer.rpc_id(sender, GameState.match_time_remaining)
 	GameState.add_player(sender)
 	announce_joined.rpc(sender, pname)
 
@@ -264,15 +312,14 @@ func _resolve_contact(a_id: int, b_id: int) -> void:
 	_apply_pvp_damage(b, a, b.spike_damage)
 	apply_combat_result.rpc(a_id, a.to_snapshot(), b_id, b.to_snapshot())
 
-## Applies damage from one PlayerState to another and credits a kill/death on a
+## Applies damage from one PlayerState to another and credits a kill on a
 ## killing blow. Shared by _resolve_attack (one-directional) and _resolve_contact
-## (mutual).
+## (mutual). take_damage() itself restores hp to max_hp as part of any death,
+## so its return value — not a before/after hp comparison — is the only
+## reliable way to tell whether this specific hit was the killing blow.
 func _apply_pvp_damage(attacker: PlayerState, target: PlayerState, dmg: float) -> void:
-	var was_alive: bool = target.hp > 0.0
-	target.take_damage(dmg)
-	if was_alive and target.hp <= 0.0:
+	if target.take_damage(dmg, true):
 		attacker.kills_players += 1
-		target.deaths += 1
 
 ## Broadcast to everyone (call_local so the server/attacker/target all apply it
 ## the same way) — unlike relay_state, this does NOT skip the local player, since

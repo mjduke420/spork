@@ -232,14 +232,14 @@ func buy_upgrade(id: String) -> bool:
 
 func _recalc() -> void:
 	var s: Dictionary = current_stage()
-	click_value = float(s.get("click_value", 1.0)) + upgrade_level("click") * UpgradeData.per_level("click")
-	idle_rate = float(s.get("idle", 0.0)) + upgrade_level("idle") * UpgradeData.per_level("idle")
-	max_hp = float(s.get("max_hp", 20.0)) + upgrade_level("hp") * UpgradeData.per_level("hp")
+	click_value = float(s.get("click_value", 1.0)) + UpgradeData.total_bonus("click", upgrade_level("click"))
+	idle_rate = float(s.get("idle", 0.0)) + UpgradeData.total_bonus("idle", upgrade_level("idle"))
+	max_hp = float(s.get("max_hp", 20.0)) + UpgradeData.total_bonus("hp", upgrade_level("hp"))
 	move_speed = float(s.get("move_speed", 60.0))
-	regen_rate = BASE_REGEN + upgrade_level("regen") * UpgradeData.per_level("regen")
-	spike_damage = BASE_SPIKE + upgrade_level("spike") * UpgradeData.per_level("spike")
+	regen_rate = BASE_REGEN + UpgradeData.total_bonus("regen", upgrade_level("regen"))
+	spike_damage = BASE_SPIKE + UpgradeData.total_bonus("spike", upgrade_level("spike"))
 	var swim := 0.10 if has_trait("flagellum") else 0.0
-	dodge_chance = clampf(swim + upgrade_level("dodge") * UpgradeData.per_level("dodge"), 0.0, 0.75)
+	dodge_chance = clampf(swim + UpgradeData.total_bonus("dodge", upgrade_level("dodge")), 0.0, 0.75)
 	hp = minf(hp, max_hp)
 
 # ---- network snapshot (Phase 1 groundwork; not persisted to disk) ----

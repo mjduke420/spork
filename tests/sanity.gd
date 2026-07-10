@@ -121,6 +121,18 @@ func _test_upgrades() -> void:
 	_check(state.upgrade_cost("click") > lvl0_cost, "click cost scaled up")
 	_check(not state.buy_upgrade("hp"), "cannot buy upgrade you cannot afford")
 
+	# Each level's own marginal gain grows by `step` over the last — level 2
+	# must add MORE than level 1 did, not the same flat amount again.
+	var click_value_after_lvl1 := state.click_value
+	state.add_biomass(state.upgrade_cost("click"))
+	_check(state.buy_upgrade("click"), "buy click upgrade again")
+	_check(state.upgrade_level("click") == 2, "click level is 2")
+	var lvl2_gain := state.click_value - click_value_after_lvl1
+	_check(lvl2_gain > UpgradeData.per_level("click"), "level 2's marginal gain exceeds level 1's")
+	_check(is_equal_approx(lvl2_gain, UpgradeData.marginal_gain("click", 2)), "level 2's gain matches marginal_gain(2)")
+	_check(is_equal_approx(UpgradeData.total_bonus("click", 2), UpgradeData.marginal_gain("click", 1) + UpgradeData.marginal_gain("click", 2)),
+		"total_bonus is the sum of each level's marginal gain")
+
 	# "hp" upgrade raises max HP; "dodge" raises dodge chance.
 	var before_hp := state.max_hp
 	state.add_biomass(state.upgrade_cost("hp"))

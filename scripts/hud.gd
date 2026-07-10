@@ -8,6 +8,16 @@ extends CanvasLayer
 
 const EvolutionData := preload("res://scripts/evolution_data.gd")
 
+const PANEL_BG := Color(0.05, 0.13, 0.15, 0.92)
+const PANEL_BORDER := Color(0.25, 0.4, 0.38)
+const GROWTH_COLOR := Color(0.45, 0.85, 0.55)   # matches player_cell.gd's protocell green
+
+const LINEAGE_COLORS := {
+	"crab": Color(0.85, 0.45, 0.3),      # warm shell orange
+	"octopus": Color(0.65, 0.35, 0.85),  # cephalopod purple
+	"whale": Color(0.3, 0.55, 0.85),     # deep ocean blue
+}
+
 var _biomass_label: Label
 var _stage_label: Label
 var _bar: ProgressBar
@@ -78,6 +88,7 @@ func _build_ui() -> void:
 	panel.offset_top = -82
 	panel.offset_left = 0
 	panel.offset_right = 0
+	panel.add_theme_stylebox_override("panel", _panel_stylebox())
 	add_child(panel)
 
 	var row := HBoxContainer.new()
@@ -94,11 +105,20 @@ func _build_ui() -> void:
 	_bar.show_percentage = false
 	_bar.min_value = 0.0
 	_bar.max_value = 1.0
+	_bar.add_theme_stylebox_override("background", _bar_track_stylebox())
+	_bar.add_theme_stylebox_override("fill", _bar_fill_stylebox(GROWTH_COLOR))
 	_bar_stack.add_child(_bar)
 
 	_evolve_btn = Button.new()
 	_evolve_btn.custom_minimum_size = Vector2(185, 50)
 	_evolve_btn.add_theme_font_size_override("font_size", 14)
+	_evolve_btn.add_theme_color_override("font_color", Color(0.95, 1.0, 0.97))
+	_evolve_btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
+	_evolve_btn.add_theme_color_override("font_disabled_color", Color(0.6, 0.68, 0.66))
+	_evolve_btn.add_theme_stylebox_override("normal", _accent_stylebox(GROWTH_COLOR, "normal"))
+	_evolve_btn.add_theme_stylebox_override("hover", _accent_stylebox(GROWTH_COLOR, "hover"))
+	_evolve_btn.add_theme_stylebox_override("pressed", _accent_stylebox(GROWTH_COLOR, "pressed"))
+	_evolve_btn.add_theme_stylebox_override("disabled", _accent_stylebox(GROWTH_COLOR, "disabled"))
 	_evolve_btn.pressed.connect(_on_evolve_pressed)
 	row.add_child(_evolve_btn)
 
@@ -112,6 +132,14 @@ func _build_ui() -> void:
 		btn.custom_minimum_size = Vector2(200, 58)
 		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		btn.add_theme_font_size_override("font_size", 13)
+		var accent: Color = LINEAGE_COLORS.get(id, GROWTH_COLOR)
+		btn.add_theme_color_override("font_color", Color(0.95, 1.0, 0.97))
+		btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
+		btn.add_theme_color_override("font_disabled_color", Color(0.6, 0.68, 0.66))
+		btn.add_theme_stylebox_override("normal", _accent_stylebox(accent, "normal"))
+		btn.add_theme_stylebox_override("hover", _accent_stylebox(accent, "hover"))
+		btn.add_theme_stylebox_override("pressed", _accent_stylebox(accent, "pressed"))
+		btn.add_theme_stylebox_override("disabled", _accent_stylebox(accent, "disabled"))
 		btn.pressed.connect(_on_choose_lineage.bind(id))
 		_lineage_row.add_child(btn)
 		_lineage_buttons[id] = btn
@@ -138,6 +166,53 @@ func _child_label(parent: Node, size: int, col: Color) -> Label:
 	l.add_theme_color_override("font_color", col)
 	parent.add_child(l)
 	return l
+
+## Dark bordered panel matching the upgrade panel's look — a top border and
+## rounded top corners since this one's docked to the bottom edge.
+func _panel_stylebox() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = PANEL_BG
+	sb.border_color = PANEL_BORDER
+	sb.border_width_top = 2
+	sb.corner_radius_top_left = 14
+	sb.corner_radius_top_right = 14
+	sb.set_content_margin_all(14)
+	return sb
+
+## Same accent-colored button treatment as upgrade_panel.gd's per-upgrade
+## styling, minus the level-based blending (evolve/lineage buttons don't
+## have levels) — just a solid themed color per variant.
+func _accent_stylebox(accent: Color, variant: String) -> StyleBoxFlat:
+	var bg := accent.darkened(0.65)
+	var border := accent
+	match variant:
+		"hover":
+			bg = accent.darkened(0.5)
+			border = accent.lightened(0.15)
+		"pressed":
+			bg = accent.darkened(0.75)
+		"disabled":
+			bg = Color(0.1, 0.14, 0.14)
+			border = Color(0.28, 0.35, 0.34)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = border
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	sb.set_content_margin_all(8)
+	return sb
+
+func _bar_track_stylebox() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.15, 0.15)
+	sb.set_corner_radius_all(6)
+	return sb
+
+func _bar_fill_stylebox(accent: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = accent.darkened(0.1)
+	sb.set_corner_radius_all(6)
+	return sb
 
 # ---- reactions ----
 

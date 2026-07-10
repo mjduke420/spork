@@ -91,7 +91,7 @@ func _toggle_collapsed() -> void:
 
 func _apply_collapsed() -> void:
 	_content.visible = not _collapsed
-	_header_btn.text = "%s  UPGRADES" % ("▶" if _collapsed else "▼")
+	_header_btn.text = "UPGRADES"
 
 func _on_buy(id: String) -> void:
 	GameState.local.buy_upgrade(id)
@@ -102,7 +102,8 @@ func _refresh() -> void:
 		var btn: Button = _buttons[id]
 		var level: int = GameState.local.upgrade_level(id)
 		var cost: float = GameState.local.upgrade_cost(id)
-		btn.text = "%s  (Lv.%d)\n%s  —  %s" % [upg["name"], level, upg["desc"], _fmt(cost)]
+		var next_gain: float = UpgradeData.marginal_gain(id, level + 1)
+		btn.text = "%s  (Lv.%d)\n%s %s  —  %s" % [upg["name"], level, _format_gain(id, next_gain), upg["unit"], _fmt(cost)]
 		btn.disabled = not GameState.local.can_buy_upgrade(id)
 		btn.add_theme_stylebox_override("normal", _upgrade_stylebox(id, level, "normal"))
 		btn.add_theme_stylebox_override("hover", _upgrade_stylebox(id, level, "hover"))
@@ -133,3 +134,11 @@ func _upgrade_stylebox(id: String, level: int, variant: String) -> StyleBoxFlat:
 
 func _fmt(v: float) -> String:
 	return "%s biomass" % String.num(floorf(v), 0)
+
+## Dodge is a 0..1 fraction, shown as a percentage; everything else is a
+## plain rounded number (all the other upgrades' per_level/step are whole
+## numbers by design, so this never hides meaningful precision).
+func _format_gain(id: String, value: float) -> String:
+	if id == "dodge":
+		return "+%d%%" % int(round(value * 100.0))
+	return "+%d" % int(round(value))

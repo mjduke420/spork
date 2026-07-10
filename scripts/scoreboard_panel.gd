@@ -95,7 +95,7 @@ func _toggle_collapsed() -> void:
 
 func _apply_collapsed() -> void:
 	_content.visible = not _collapsed
-	_header_btn.text = "%s  SCOREBOARD" % ("▶" if _collapsed else "▼")
+	_header_btn.text = "SCOREBOARD"
 
 func _format_time(seconds: float) -> String:
 	var s := maxi(0, int(ceil(seconds)))
